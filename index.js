@@ -1,19 +1,21 @@
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
+const fs = require('fs');
+
 
 const scrape = async () => {
     const allCourses = [];
-    const browser = await puppeteer.launch({ headless: false });
+    const browser = await puppeteer.launch();
     const page = await browser.newPage();
     
     await page.goto('https://www.bu.edu/phpbin/course-search/search.php?page=0&pagesize=10&adv=1&nolog=&search_adv_all=&yearsem_adv=2024-SPRG&credits=*&pathway=&hub_match=all&pagesize=10');
     while(true) {
         await page.waitForSelector('.coursearch-results', { timeout: 30000 });
-
+        
         const html = await page.content();
         const $ = cheerio.load(html);
         const courses = $('.coursearch-results').find('.coursearch-result');
-
+        
         courses.each((index, element) => {
             const heading = $(element).find('.coursearch-result-heading');
             const description = $(element).find('.coursearch-result-content-description');
@@ -22,7 +24,7 @@ const scrape = async () => {
                 hubs.push($(element).text());
             });
             let prereq;
-
+            
             try {
                 prereq = $(description).find('p').get(0).children[0].data
             } catch {
@@ -35,7 +37,7 @@ const scrape = async () => {
                 hubs: hubs,
             }
             allCourses.push(course);
-
+            
         });
         try {
             // Click the next button and wait for the next page to load
@@ -46,12 +48,36 @@ const scrape = async () => {
         } catch (err){
             break;
         }
-    
+        
     }
     
     browser.close();
-    console.log(allCourses.length);
-    }
+    //turn the object into a string and write it to a file in csv format
+    const csv = convertToCSV(allCourses);
+    fs.writeFileSync('courses.csv', csv);
+    console.log('Scraping Complete!');
+    
+    
+}
 
+const convertToCSV = (objArray) => {
+    const array = typeof objArray != 'object' ? JSON.parse(objArray) : objArray;
+    let str = `${Object.keys(array[0]).join(',')}` + '\r\n';
+    
+    for (let i = 0; i < array.length; i++) {
+        let line = '';
+        for (let index in array[i]) {
+            if (line != '') line += ','
+            
+            line += array[i][index];
+        }
+        
+        str += line + '\r\n';
+    }
+    
+    return str;
+}
 
 scrape();
+
+
